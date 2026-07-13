@@ -20,38 +20,52 @@ layar, hingga operasi sistem lanjutan.
 
 ---
 
-## 📌 Persyaratan Sistem
+## 📌 Persyaratan
 
-| Platform   | Keterangan                                                   |
-| ---------- | ------------------------------------------------------------ |
-| Kali Linux | Paket `android-tools-adb` (untuk `adb`), `scrcpy` (opsional) |
-| Termux     | `adb` (via `pkg install adb`), `termux-api` (opsional)       |
-
-> Pastikan `adb` ada dalam PATH. Untuk Termux, jalankan
-> `termux-usb` dulu untuk mengaktifkan akses USB.
+- **Sistem Operasi:** Linux (direkomendasikan, cth: Kali, Ubuntu) atau Windows dengan WSL.
+- **Python:** Versi 3.8 atau lebih baru.
+- **Koneksi:** Kabel USB atau koneksi WiFi di jaringan yang sama dengan perangkat target.
 
 ---
 
 ## 🧱 Instalasi
 
-> Sebelum memulai, tinjau `requirements.txt` untuk daftar paket
-> yang diperlukan.
->
+Langkah-langkah berikut adalah untuk sistem berbasis Debian/Ubuntu (seperti Kali Linux).
+
+### 1. Clone Repositori
+```bash
+git clone https://github.com/youruser/Ghost-ADB.git    # Ganti dengan alamat repositori Anda
+cd Ghost-ADB
+```
+
+### 2. Instal Dependensi Sistem
+Paket-paket ini diperlukan untuk fungsionalitas inti dan antarmuka.
+```bash
+sudo apt update && sudo apt upgrade -y
+sudo apt install android-tools-adb scrcpy dialog avahi-daemon -y
+```
+
+### 3. Instal Dependensi Python
+Aplikasi GUI modern (`GUI_App.py`) memerlukan beberapa paket Python.
+```bash
+pip install -r requirements.txt
+```
+
+> ⚠️ **Catatan untuk Pengguna Linux:** Jika Anda mendapatkan error tentang "externally-managed-environment", ini adalah fitur keamanan baru. Anda bisa mengatasinya dengan menggunakan virtual environment (direkomendasikan) atau dengan menambahkan flag `--break-system-packages`:
 > ```bash
-> cat requirements.txt
+> pip install -r requirements.txt --break-system-packages
 > ```
 
-### Kali Linux
+### 4. Berikan Izin Eksekusi
+Agar skrip-skrip bisa dijalankan:
+```bash
+chmod +x *.sh
+```
 
-1. Update daftar paket dan tingkatkan sistem:
-   ```bash
-   sudo apt update && sudo apt upgrade -y
-   ```
-2. Pasang paket yang tercantum dalam `requirements.txt`:
-   ```bash
-   sudo apt install $(grep -v '^#' requirements.txt) -y
-   ```
-3. Clone atau unduh repositori skrip:
+---
+
+### Instalasi Cepat (Legacy)
+Jika Anda hanya ingin menggunakan skrip Bash (`Ghost-Adb-v1.0.sh`):
    ```bash
    git clone https://github.com/youruser/Ghost-ADB.git    # gunakan alamat repositori Ghost-ADB Anda
    cd Ghost-ADB    # atau direktori tempat skrip berada
@@ -61,13 +75,6 @@ layar, hingga operasi sistem lanjutan.
    ```bash
    ./Ghost-Adb.sh
    ```
-
-Untuk akses dari mana saja, tambahkan lokasi skrip ke PATH atau buat
-symlink:
-
-```bash
-sudo ln -s $(pwd)/Ghost-Adb.sh /usr/local/bin/ghost-adb
-```
 
 ### Termux
 
