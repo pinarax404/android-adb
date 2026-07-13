@@ -2,11 +2,11 @@ import customtkinter
 import subprocess
 import threading
 import os
-import time
+import time 
 from datetime import datetime
 
 # =================================================================
-# GHOST-ADB DESKTOP GUI
+# ANDROID-RAT DESKTOP GUI
 # Author: Gemini Code Assist
 # Version: 1.0
 #
@@ -147,10 +147,10 @@ class App(customtkinter.CTk):
         super().__init__()
 
         self.active_device_serial = None
-        self.title("Ghost-ADB v1.0")
+        self.title("ANDROID-RAT v1.0")
 
         # --- Center the window on the screen ---
-        window_width = 800
+        window_width = 800 
         window_height = 600
         screen_width = self.winfo_screenwidth()
         screen_height = self.winfo_screenheight()
@@ -167,7 +167,7 @@ class App(customtkinter.CTk):
         self.sidebar_frame.grid(row=0, column=0, rowspan=4, sticky="nsew")
         self.sidebar_frame.grid_rowconfigure(4, weight=1)
 
-        self.logo_label = customtkinter.CTkLabel(self.sidebar_frame, text="GHOST-ADB", font=customtkinter.CTkFont(size=20, weight="bold"), text_color=HACKER_THEME["border_red"])
+        self.logo_label = customtkinter.CTkLabel(self.sidebar_frame, text="ANDROID-RAT", font=customtkinter.CTkFont(size=20, weight="bold"), text_color=HACKER_THEME["border_red"])
         self.logo_label.grid(row=0, column=0, padx=20, pady=(20, 10))
 
         self.status_label = customtkinter.CTkLabel(self.sidebar_frame, text="Status Perangkat:", anchor="w", text_color="gray70")
@@ -258,8 +258,8 @@ class App(customtkinter.CTk):
 
         # --- OUTPUT/LOG TEXTBOX ---
         self.log_textbox = customtkinter.CTkTextbox(self, height=150, fg_color="black", text_color=HACKER_THEME["text_green"], border_color=HACKER_THEME["border_red"], border_width=1)
-        self.log_textbox.grid(row=1, column=1, padx=10, pady=(0, 10), sticky="nsew")
-        self.log_textbox.insert("0.0", "Selamat datang di Ghost-ADB GUI!\n")
+        self.log_textbox.grid(row=1, column=1, padx=10, pady=(0, 10), sticky="nsew") 
+        self.log_textbox.insert("0.0", "Selamat datang di ANDROID-RAT GUI!\n")
 
         # --- Mulai update status ---
         self.update_status_loop()
