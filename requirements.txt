@@ -1,7 +1,10 @@
 
 android-tools-adb  
 scrcpy           
+
 bash             
 coreutils         
 
 termux-api        
+rich
+customtkinter
