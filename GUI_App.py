@@ -11,17 +11,91 @@ import webbrowser
 import re
 import importlib
 from datetime import datetime
-import welcome
+from PIL import Image
 
 
-# =================================================================
-# ANDROID-RAT DESKTOP GUI
-# Author: Gemini Code Assist
-# Version: 1.0
-#
-# Aplikasi Desktop GUI untuk mengontrol perangkat Android via ADB.
-# Dibuat dengan Python dan CustomTkinter.
-# =================================================================
+# --- WELCOME SCREEN ---
+class WelcomeScreen(customtkinter.CTk):
+    """
+    Layar pembuka sederhana yang menampilkan pesan selamat datang.
+    Didesain untuk ditampilkan oleh aplikasi utama saat startup.
+    """
+    def __init__(self):
+        super().__init__()
+
+        self.title("Welcome")
+        self.overrideredirect(True)  # Menghilangkan dekorasi jendela (title bar, dll.)
+        self.configure(fg_color="#1a1a1a")
+        self.attributes("-topmost", True) # Menjaga agar tetap di atas
+
+        # --- Pusatkan jendela di layar ---
+        window_width = 500
+        window_height = 250
+        screen_width = self.winfo_screenwidth()
+        screen_height = self.winfo_screenheight()
+        center_x = int(screen_width / 2 - window_width / 2)
+        center_y = int(screen_height / 2 - window_height / 2)
+        self.geometry(f'{window_width}x{window_height}+{center_x}+{center_y}')
+
+        # --- Layout ---
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+
+        main_frame = customtkinter.CTkFrame(self, fg_color="transparent", corner_radius=10)
+        main_frame.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
+        main_frame.configure(border_color="#FF0000", border_width=2)
+        main_frame.grid_rowconfigure((0, 2), weight=1)
+        main_frame.grid_columnconfigure(0, weight=1)
+
+        logo_path = os.path.join(BASE_DIR, "icon_aplikasi.png")
+        self.logo_image = None
+        if os.path.exists(logo_path):
+            self.logo_image = tkinter.PhotoImage(file=logo_path)
+            if self.logo_image.width() > 110:
+                self.logo_image = self.logo_image.subsample(max(1, self.logo_image.width() // 110))
+
+        self.logo_label = tkinter.Label(
+            main_frame,
+            image=self.logo_image,
+            text="",
+            width=110,
+            height=110,
+            bg="#1a1a1a",
+            bd=0,
+            highlightthickness=0
+        )
+        self.logo_label.grid(row=0, column=0, padx=20, pady=(20, 6), sticky="n")
+
+        # --- Pesan Selamat Datang ---
+        welcome_label = customtkinter.CTkLabel(main_frame, text="Welcome to MEDUSA RAT ANDROID", font=customtkinter.CTkFont(size=28, weight="bold"), text_color="#FF0000")
+        welcome_label.grid(row=1, column=0, padx=20, pady=(10, 10), sticky="s")
+
+        # --- Teks Loading ---
+        loading_label = customtkinter.CTkLabel(main_frame, text="Initializing components...", font=customtkinter.CTkFont(size=14), text_color="gray80")
+        loading_label.grid(row=2, column=0, padx=20, pady=10)
+        
+        # --- Progress Bar ---
+        progressbar = customtkinter.CTkProgressBar(main_frame, width=300, mode="indeterminate", progress_color="#FF0000")
+        progressbar.grid(row=2, column=0, padx=20, pady=(10, 20), sticky="n")
+        progressbar.start()
+
+    def close_with_fade(self, on_close_callback):
+        self.on_close_callback = on_close_callback
+        self._fade_out()
+
+    def _fade_out(self):
+        try:
+            current_alpha = self.attributes("-alpha")
+            if current_alpha > 0.1:
+                new_alpha = current_alpha - 0.1
+                self.attributes("-alpha", new_alpha)
+                self.after(30, self._fade_out)
+            else:
+                self.destroy()
+                if self.on_close_callback:
+                    self.on_close_callback()
+        except tkinter.TclError:
+            pass
 
 # --- KONFIGURASI ---
 customtkinter.set_appearance_mode("Dark") # Paksa mode gelap
@@ -222,69 +296,63 @@ class App(customtkinter.CTk):
         self.loading_progressbar = customtkinter.CTkProgressBar(self.loading_popup, width=260, height=12, mode="indeterminate", fg_color="#2b2b2b", progress_color=HACKER_THEME["border_red"])
         self.loading_progressbar.pack(padx=18, pady=(0, 12))
 
-        # --- Buka aplikasi langsung dalam mode maximize yang responsif ---
-        self.screen_width = self.winfo_screenwidth()
-        self.screen_height = self.winfo_screenheight()
-        self.sidebar_width = max(220, min(280, int(self.screen_width * 0.22)))
-        self.minsize(900, 600)
-        self.resizable(True, True)
-        self.state("zoomed")
+        # --- Responsive fullscreen window setup ---
+        self.minsize(1100, 700)
+        # self.state("zoomed") # Dihapus agar tidak fullscreen
+        self.bind("<Configure>", self._on_window_resize)
+
+        # --- Pusatkan jendela di layar ---
+        window_width = 1280
+        window_height = 720
+        screen_width = self.winfo_screenwidth()
+        screen_height = self.winfo_screenheight()
+        center_x = int(screen_width / 2 - window_width / 2)
+        center_y = int(screen_height / 2 - window_height / 2)
+        self.geometry(f'{window_width}x{window_height}+{center_x}+{center_y}')
 
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
 
         # --- LAYOUT UTAMA ---
-        self.grid_columnconfigure(0, minsize=self.sidebar_width, weight=0)
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
         # --- FRAME KIRI (SIDEBAR) ---
-        self.sidebar_frame = customtkinter.CTkFrame(self, width=self.sidebar_width, corner_radius=0, fg_color="#1a1a1a")
+        self.sidebar_frame = customtkinter.CTkFrame(self, width=280, corner_radius=0, fg_color="#1a1a1a")
         self.sidebar_frame.grid(row=0, column=0, rowspan=4, sticky="nsew")
-        self.sidebar_frame.grid_rowconfigure(4, weight=1)
+        self.sidebar_frame.grid_columnconfigure(0, weight=1)
+        self.sidebar_frame.grid_rowconfigure(5, weight=1) # Memberi ruang untuk info perangkat
 
-        self.logo_icon_path = os.path.join(BASE_DIR, "icon_aplikasi.png")
-        self.logo_image = None
-        if os.path.exists(self.logo_icon_path):
-            try:
-                self.logo_image = tkinter.PhotoImage(master=self, file=self.logo_icon_path)
-                if self.logo_image.width() > 120:
-                    self.logo_image = self.logo_image.subsample(max(1, self.logo_image.width() // 120))
-            except Exception:
-                self.logo_image = None
+        # --- Logo Aplikasi ---
+        try:
+            image_path = os.path.join(BASE_DIR, "icon_aplikasi.png")
+            self.app_logo_image = customtkinter.CTkImage(Image.open(image_path), size=(80, 80))
+            self.app_logo_label = customtkinter.CTkLabel(self.sidebar_frame, image=self.app_logo_image, text="")
+            self.app_logo_label.grid(row=0, column=0, padx=20, pady=(20, 10))
+        except (FileNotFoundError, Exception) as e:
+            # Fallback jika gambar tidak ditemukan
+            self.app_logo_label = customtkinter.CTkLabel(self.sidebar_frame, text="[LOGO]", font=customtkinter.CTkFont(size=16, weight="bold"))
+            self.app_logo_label.grid(row=0, column=0, padx=20, pady=(20, 10))
+            print(f"Info: Tidak dapat memuat logo 'icon_aplikasi.png'. Pastikan file ada di direktori yang sama. Error: {e}")
 
-        self.logo_image_label = tkinter.Label(
-            self.sidebar_frame,
-            image=self.logo_image,
-            text="",
-            width=120,
-            height=120,
-            compound="top",
-            bg="#1a1a1a",
-            bd=0,
-            highlightthickness=0
-        )
-        self.logo_image_label.grid(row=0, column=0, padx=20, pady=(20, 6), sticky="n")
-
-        self.logo_label = customtkinter.CTkLabel(
-            self.sidebar_frame,
-            text="MEDUSA RAT ANDROID",
-            font=customtkinter.CTkFont(size=18, weight="bold"),
-            text_color=HACKER_THEME["border_red"]
-        )
-        self.logo_label.grid(row=1, column=0, padx=20, pady=(0, 10), sticky="ew")
+        self.logo_label = customtkinter.CTkLabel(self.sidebar_frame, text="MEDUSA RAT ANDROID", font=customtkinter.CTkFont(size=20, weight="bold"), text_color=HACKER_THEME["border_red"])
+        self.logo_label.grid(row=1, column=0, padx=20, pady=(0, 20))
 
         self.scan_network_button = customtkinter.CTkButton(self.sidebar_frame, text="Scan Jaringan (WiFi)", command=self.scan_network, fg_color="#008080", hover_color="#00CED1")
         self.scan_network_button.grid(row=2, column=0, padx=20, pady=10)
 
-        self.status_label = customtkinter.CTkLabel(self.sidebar_frame, text="Pilih Perangkat Aktif:", anchor="w", text_color="gray70")
-        self.status_label.grid(row=3, column=0, padx=20, pady=10)
+        self.device_panel = customtkinter.CTkFrame(self.sidebar_frame, fg_color="transparent")
+        self.device_panel.grid(row=3, column=0, padx=20, pady=10, sticky="ew")
+        self.device_panel.grid_columnconfigure(0, weight=1)
+
+        self.status_label = customtkinter.CTkLabel(self.device_panel, text="Pilih Perangkat Aktif:", anchor="center", justify="center", text_color="gray70")
+        self.status_label.grid(row=0, column=0, pady=(0, 8), sticky="ew")
         
         self.device_selector_var = customtkinter.StringVar(value="[ Tidak ada perangkat ]")
-        self.device_selector_menu = customtkinter.CTkOptionMenu(self.sidebar_frame, variable=self.device_selector_var, command=self.on_device_select, values=["[ Tidak ada perangkat ]"])
-        self.device_selector_menu.grid(row=4, column=0, padx=20, pady=(0, 10), sticky="ew")
-
-        self.device_info_label = customtkinter.CTkLabel(self.sidebar_frame, text="Detail:\n-", anchor="center", justify="center", text_color="gray70")
-        self.device_info_label.grid(row=5, column=0, padx=20, pady=(0, 10), sticky="ew")
+        self.device_selector_menu = customtkinter.CTkOptionMenu(self.device_panel, variable=self.device_selector_var, command=self.on_device_select, values=["[ Tidak ada perangkat ]"])
+        self.device_selector_menu.grid(row=1, column=0, pady=(0, 8), sticky="ew")
+        
+        self.device_info_label = customtkinter.CTkLabel(self.device_panel, text="Detail:\n-", anchor="center", justify="center", wraplength=220, text_color="gray70")
+        self.device_info_label.grid(row=2, column=0, sticky="ew")
 
         self.open_loot_button = customtkinter.CTkButton(self.sidebar_frame, text="Open ADB_LOOT", command=self.open_loot_folder, fg_color="#006400", hover_color="#228B22")
         self.open_loot_button.grid(row=6, column=0, padx=20, pady=10)
@@ -411,7 +479,7 @@ class App(customtkinter.CTk):
         # --- OUTPUT/LOG TEXTBOX ---
         self.log_textbox = customtkinter.CTkTextbox(self, height=150, fg_color="black", text_color=HACKER_THEME["text_green"], border_color=HACKER_THEME["border_red"], border_width=1)
         self.log_textbox.grid(row=1, column=1, padx=10, pady=(0, 10), sticky="nsew") 
-        self.log_textbox.insert("0.0", "Selamat datang di ANDROID-RAT GUI!\n")
+        self.log_textbox.insert("0.0", "Selamat datang di MEDUSA RAT ANDROID GUI!\n")
 
         # --- PANEL ADB_LOOT EXPLORER (muncul hanya saat tombol sidebar ditekan) ---
         self.loot_frame = customtkinter.CTkFrame(self.main_frame, corner_radius=10, fg_color="#111111")
@@ -444,24 +512,19 @@ class App(customtkinter.CTk):
         self.open_loot_file_button = customtkinter.CTkButton(self.loot_frame, text="Buka Gambar/Video", command=self.open_selected_loot_file, fg_color="#008080", hover_color="#00CED1")
         self.open_loot_file_button.grid(row=2, column=1, padx=(5, 10), pady=(0, 10), sticky="e")
 
-        self.bind("<Configure>", self._apply_responsive_layout)
-
         # --- Mulai update status ---
         self.update_status_loop()
         self._start_auto_reconnect_loop()
         self.after(500, self.refresh_loot_panel)
 
-    def _apply_responsive_layout(self, event=None):
-        """Menyesuaikan lebar sidebar agar tetap responsif saat layar berubah ukuran."""
-        if event is not None and event.widget != self:
-            return
-
-        current_screen_width = self.winfo_screenwidth()
-        new_sidebar_width = max(220, min(280, int(current_screen_width * 0.22)))
-        if getattr(self, "sidebar_width", None) != new_sidebar_width:
-            self.sidebar_width = new_sidebar_width
-            self.sidebar_frame.configure(width=self.sidebar_width)
-            self.grid_columnconfigure(0, minsize=self.sidebar_width)
+    def _on_window_resize(self, event=None):
+        """Menjaga panel perangkat tetap rapi saat ukuran window berubah."""
+        try:
+            if hasattr(self, "device_panel"):
+                self.device_panel.grid_columnconfigure(0, weight=1)
+                self.device_info_label.configure(wraplength=max(180, min(240, self.sidebar_frame.winfo_width() - 50)))
+        except Exception:
+            pass
 
     def on_device_select(self, selected_serial):
         """Dipanggil saat pengguna memilih perangkat dari dropdown."""
@@ -1565,18 +1628,5 @@ class App(customtkinter.CTk):
                 pass
 
 if __name__ == "__main__":
-    # Tampilkan layar selamat datang terlebih dahulu
-    welcome_screen = welcome.show_welcome()
-
-    def start_main_app():
-        # Inisialisasi aplikasi utama
-        app = App()
-        # Setelah aplikasi utama siap, hancurkan layar selamat datang
-        welcome_screen.destroy()
-        # Jalankan loop utama aplikasi
-        app.mainloop()
-
-    # Beri jeda 2 detik untuk efek loading, lalu jalankan aplikasi utama
-    welcome_screen.after(2000, start_main_app)
-    # Jalankan loop untuk layar selamat datang
-    welcome_screen.mainloop()
+    app = App()
+    app.mainloop()
